@@ -1,0 +1,12 @@
+{
+  "bad_code.py": [
+    "long_function",
+    "hardcoded_secret",
+    "broad_exception",
+    "todo",
+    "missing_docstring",
+    "unused_import",
+    "too_many_args",
+    "deep_nesting"
+  ]
+}

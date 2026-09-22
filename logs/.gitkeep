@@ -1,0 +1,2 @@
+# logs directory — runtime run logs are stored here
+# run_monitor.json is generated at runtime and excluded from git via .gitignore

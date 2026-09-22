@@ -1,0 +1,33 @@
+{
+  "trace_id": "trace_001",
+  "label": "SUCCESS",
+  "input": {
+    "repository_url": "https://github.com/psf/requests",
+    "goal": "Analyze this GitHub repository and identify potential code quality issues and suggest fixes.",
+    "simulate_failure": false
+  },
+  "expected_behavior": "Agent validates URL, fetches repo metadata, retrieves file tree, selects Python files, runs analysis, generates full structured report. All steps complete successfully.",
+  "plan": [
+    "Validate GitHub repository URL.",
+    "Fetch repository metadata.",
+    "Inspect repository file tree.",
+    "Select supported Python source files.",
+    "Analyze source files for code quality issues.",
+    "Validate and prioritize findings.",
+    "Generate structured final report."
+  ],
+  "expected_tool_calls": [
+    "github_repository (attempt 1) — success",
+    "github_tree — success",
+    "github_file (multiple) — success",
+    "code_quality_analyzer — success"
+  ],
+  "expected_failures": [],
+  "expected_output": {
+    "status": "success",
+    "findings_detected": true,
+    "report_generated": true,
+    "recovery_needed": false
+  },
+  "notes": "Normal happy-path run. Tests the complete end-to-end workflow without any injected failures."
+}

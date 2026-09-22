@@ -1,0 +1,46 @@
+{
+  "trace_id": "trace_003",
+  "label": "INVALID_INPUT",
+  "input": {
+    "repository_url": "not-a-github-url",
+    "goal": "Analyze this repository.",
+    "simulate_failure": false
+  },
+  "failure_injected": false,
+  "expected_behavior": "Agent immediately detects that the URL is not a valid GitHub repository URL. Execution halts at Step 1 with a clear error message. No network calls are made. No partial report is generated. The error is shown to the user.",
+  "plan": [
+    "Validate GitHub repository URL.",
+    "Fetch repository metadata.",
+    "Inspect repository file tree.",
+    "Select supported Python source files.",
+    "Analyze source files for code quality issues.",
+    "Validate and prioritize findings.",
+    "Generate structured final report."
+  ],
+  "expected_tool_calls": [],
+  "expected_failures": [
+    {
+      "step": 1,
+      "error": "Invalid GitHub URL format."
+    }
+  ],
+  "expected_output": {
+    "status": "failed",
+    "findings_detected": false,
+    "report_generated": false,
+    "recovery_needed": false
+  },
+  "notes": "Tests graceful handling of invalid input. Agent must not crash, must not make any API calls, must show a useful error message.",
+  "additional_test_cases": [
+    {
+      "label": "INVALID_INPUT",
+      "input": "https://gitlab.com/user/repo",
+      "expected": "Invalid GitHub URL"
+    },
+    {
+      "label": "UNSUPPORTED_REPOSITORY",
+      "input": "https://github.com/torvalds/linux",
+      "expected": "No Python files found — analysis skipped (C codebase)"
+    }
+  ]
+}

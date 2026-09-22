@@ -1,0 +1,35 @@
+# Environment variables — never commit this file
+.env
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# pytest
+.pytest_cache/
+.pytest_ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated at runtime — exclude from git (keep .gitkeep)
+logs/*.json
+evaluation/evaluation_results.json
+
+# Reports directory — actual report outputs
+reports/*.json
+reports/*.md
