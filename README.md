@@ -1,3 +1,16 @@
+---
+title: Agentic GitHub Code Quality Reviewer
+emoji: 🔍
+colorFrom: blue
+colorTo: indigo
+sdk: streamlit
+sdk_version: "1.40.0"
+app_file: app.py
+pinned: false
+license: mit
+short_description: Agentic AI that reviews GitHub repos for code quality issues
+---
+
 # 🔍 Agentic GitHub Code Quality Reviewer
 
 An agentic AI system that autonomously analyzes GitHub repositories for code quality issues, handles failures gracefully, and generates structured reports.
