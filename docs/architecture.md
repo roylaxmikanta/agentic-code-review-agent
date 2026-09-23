@@ -1,5 +1,9 @@
 # Architecture
 
+## Diagram
+
+![Architecture Diagram](architecture.png)
+
 ## System Overview
 
 ```mermaid
@@ -7,6 +11,7 @@ flowchart TD
     User([👤 User]) -->|URL + Goal| UI[Streamlit UI\napp.py]
     UI -->|validated input| Agent[Agent\nagent.py]
     Agent -->|goal| Planner[Planner\nplanner.py]
+    Planner -.->|optional plan refinement| LLM[Groq LLM\nllama-3.1-8b-instant]
     Planner -->|plan steps| Agent
 
     Agent --> Step1[Step 1: Validate URL]
@@ -17,38 +22,40 @@ flowchart TD
     Agent --> Step6[Step 6: Validate Findings]
     Agent --> Step7[Step 7: Generate Report]
 
-    Step2 --> GHT[GitHub Repository Tool\ngithub_tool.py]
-    Step3 --> GHT
-    Step4 --> GHT
-    Step5 --> CA[Code Quality Analyzer\ncode_analyzer.py]
+    Step2 --> T1[Tool 1: GitHub Repository Tool\ngithub_tool.py]
+    Step3 --> T1
+    Step4 --> T1
+    Step5 --> T2[Tool 2: Code Quality Analyzer\ncode_analyzer.py]
+    Step5 --> T3[Tool 3: Static Checker\nstatic_checker.py]
 
-    GHT -->|success| Agent
-    GHT -->|failure| FH[Failure Handler\nretry logic in agent.py]
-    FH -->|retry| GHT
+    T1 -->|success| Agent
+    T1 -->|failure| FH[Failure Handler\nretry logic in agent.py]
+    FH -->|retry| T1
 
-    CA --> Reporter[Reporter\nreporter.py]
-    Reporter -->|JSON + MD| UI
+    T2 --> Reporter[Reporter\nreporter.py]
+    T3 --> Reporter
+    Reporter -->|JSON + MD| ReportsDir[(reports/)]
+    Reporter -->|rendered| UI
 
     Agent --> Monitor[Monitor\nmonitor.py]
     Monitor -->|run metrics| LogFile[(logs/run_monitor.json)]
+    UI -->|dashboard| LogFile
 
-    UI -->|read| LogFile
-
-    Planner -.->|optional| LLM[LLM API\nOpenAI-compatible]
-    Reporter -.->|optional narrative| LLM
+    Reporter -.->|findings summary only| LLM
 ```
 
 ## Component Responsibilities
 
 | Component | File | Responsibility |
 |-----------|------|----------------|
-| Streamlit UI | `app.py` | User input, step display, findings, downloads, monitoring |
-| Agent | `src/agent.py` | Orchestrates all steps, handles retry logic |
-| Planner | `src/planner.py` | Converts goal to execution plan, optional LLM refinement |
-| GitHub Tool | `src/github_tool.py` | URL validation, repo metadata, file tree, file content |
-| Code Analyzer | `src/code_analyzer.py` | AST-based Python quality analysis |
+| Streamlit UI | `app.py` | User input, step display, findings, downloads, monitoring dashboard |
+| Agent | `src/agent.py` | Orchestrates all 7 steps, handles retry logic, saves reports |
+| Planner | `src/planner.py` | Converts goal to execution plan; optional Groq LLM refinement |
+| Tool 1: GitHub | `src/github_tool.py` | URL validation, repo metadata, file tree, file content |
+| Tool 2: Analyzer | `src/code_analyzer.py` | AST-based Python quality analysis (10 check types) |
+| Tool 3: Static | `src/static_checker.py` | py_compile syntax check + AST static checks |
 | Reporter | `src/reporter.py` | Builds JSON report, renders Markdown |
-| Monitor | `src/monitor.py` | Records run metrics, computes aggregate stats |
+| Monitor | `src/monitor.py` | Records per-run metrics, computes aggregate stats |
 | Models | `src/models.py` | Shared dataclasses (AgentState, Finding, ToolResult, etc.) |
 | Evaluator | `src/evaluator.py` | Precision/recall/F1 evaluation framework |
 
@@ -58,56 +65,51 @@ flowchart TD
 User Input (URL + Goal)
         │
         ▼
-URL Validation (regex)
+URL Validation (regex — no API call)
         │
         ▼
-GitHub API → repo metadata → repo file tree → file contents
+GitHub API → repo metadata → repo file tree → file contents (Tool 1)
         │
-        ▼ (if failure)
-Retry Logic (up to 2 attempts)
+        ▼ (on failure)
+Retry Logic (up to 2 attempts, logged as RetryRecord)
         │
         ▼
-AST Parser → Code Quality Findings
+AST Parser → Code Quality Findings (Tool 2)
+py_compile → Static Check Findings (Tool 3)
         │
         ▼
 Deduplication + Severity Sort
         │
         ▼
-Optional LLM Narrative (from findings summary, NOT raw code)
+Optional Groq Narrative  ←── findings summary ONLY (no raw code)
         │
         ▼
-Structured Report (JSON + Markdown)
+Structured Report → reports/ (JSON + MD)
         │
         ▼
-Monitor Log → Aggregate Statistics
+Monitor Log → logs/run_monitor.json → Aggregate Stats in UI
 ```
 
-## Tool Interface Contract
+## LLM Integration (Groq)
 
-All tools return a `ToolResult`:
+The LLM receives **only**:
+- Repository name and language
+- Count of findings per severity
+- Top 3 finding categories
 
-```python
-@dataclass
-class ToolResult:
-    success: bool
-    tool: str
-    data: Optional[Any]
-    error: Optional[str]
-    attempt: int = 1
-```
+Raw source code is **never** sent to the LLM.
 
-## Failure & Recovery
+## Failure & Recovery Flow
 
 ```
-Attempt 1 → simulate_failure=True → ToolResult(success=False, error="Simulated timeout")
-                                              │
-                                              ▼
-                                    RetryRecord logged
-                                              │
-                                              ▼
-Attempt 2 → simulate_failure=False (attempt>1) → ToolResult(success=True)
-                                              │
-                                              ▼
-                                    RetryRecord logged
-                                    Execution continues
+Attempt 1 → simulate_failure=True
+          → ToolResult(success=False, error="Simulated timeout")
+          → RetryRecord(attempt=1, status="failed") logged
+          ↓
+Attempt 2 → simulate_failure=False (attempt > 1 skips injection)
+          → ToolResult(success=True)
+          → RetryRecord(attempt=2, status="success") logged
+          ↓
+Execution continues normally
+Final report notes: "One failure recovered through retry"
 ```

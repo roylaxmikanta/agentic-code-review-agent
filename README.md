@@ -20,42 +20,44 @@ The agent accepts a GitHub repository URL and a natural-language goal, then:
 
 ## Why This Project?
 
-GitHub code quality review is a genuinely useful agentic task: the agent must discover information, make decisions about what to analyze, use multiple tools with different responsibilities, handle real-world failures (rate limits, 404s, network errors), and synthesize findings into something actionable. It naturally demonstrates all the key agentic properties without artificial complexity.
+GitHub code quality review is a genuinely useful agentic task: the agent must discover information, make decisions about what to analyze, use multiple tools with different responsibilities, handle real-world failures (rate limits, 404s, network errors), and synthesize findings into something actionable. It naturally demonstrates all key agentic properties without artificial complexity.
 
 ---
 
 ## Features
 
 - ✅ Natural-language goal input
-- ✅ Visible execution plan before each run
-- ✅ Two distinct tools: GitHub API + Python AST Analyzer
-- ✅ Deliberate failure injection + retry/recovery
-- ✅ Structured JSON and Markdown report export
-- ✅ Secret detection (pattern-based, masked in output)
-- ✅ Monitoring dashboard (aggregate run metrics)
-- ✅ Evaluation framework (precision / recall / F1)
-- ✅ Synthetic test repository with ground truth
-- ✅ Optional LLM integration (fallback available)
-- ✅ No API key required for public repository analysis
+- ✅ Visible execution plan shown before each run
+- ✅ **Three distinct tools**: GitHub API + Python AST Analyzer + py_compile Static Checker
+- ✅ Deliberate failure injection + retry/recovery (UI checkbox)
+- ✅ Structured JSON and Markdown report — downloaded or auto-saved to `reports/`
+- ✅ Secret detection (pattern-based, **masked** in output — never printed in plain text)
+- ✅ Monitoring dashboard (live aggregate run metrics in Streamlit)
+- ✅ Evaluation framework: Precision=1.0, Recall=1.0, F1=1.0 on synthetic test data
+- ✅ **LLM via Groq** (free, configured) — AI-generated plan + report narrative
+- ✅ Full fallback when LLM is unavailable — project works without any API key
 
 ---
 
 ## Architecture
 
-See [`docs/architecture.md`](docs/architecture.md) for the full Mermaid diagram.
+![Architecture](docs/architecture.png)
+
+See [`docs/architecture.md`](docs/architecture.md) for the full Mermaid diagram and component details.
 
 ```
-User → Streamlit UI → Agent → Planner
+User → Streamlit UI → Agent → Planner ──(optional)──→ Groq LLM
                                 ↓
                          Tool Executor
-                         ├── GitHub Repository Tool
-                         └── Code Quality Analyzer
+                         ├── Tool 1: GitHub Repository Tool
+                         ├── Tool 2: Code Quality Analyzer (AST)
+                         └── Tool 3: Static Checker (py_compile)
                                 ↓
-                         Failure Handler (retry)
+                         Failure Handler (retry up to 2 attempts)
                                 ↓
-                         Report Generator
+                         Report Generator → reports/ (JSON + MD)
                                 ↓
-                         Monitor / Log → Final Output
+                         Monitor → logs/run_monitor.json
 ```
 
 ---
@@ -67,11 +69,12 @@ User → Streamlit UI → Agent → Planner
 | UI | Streamlit |
 | HTTP | requests |
 | Code Analysis | Python `ast` (standard library) |
-| LLM (optional) | OpenAI-compatible API |
-| Testing | pytest |
+| Static Check | Python `py_compile` (standard library) |
+| LLM | **Groq** (`llama-3.1-8b-instant`) — free, OpenAI-compatible |
+| Testing | pytest (53 tests) |
 | Config | python-dotenv |
 
-No unnecessary dependencies. The core project works without any API keys.
+**No unnecessary dependencies.** The entire core analysis stack is standard library only.
 
 ---
 
@@ -81,49 +84,56 @@ No unnecessary dependencies. The core project works without any API keys.
 agentic-code-review-agent/
 │
 ├── app.py                          # Streamlit UI
+├── conftest.py                     # pytest path setup
+├── pytest.ini                      # pytest configuration
+├── pyproject.toml                  # project metadata
 ├── requirements.txt
-├── .env.example
+├── .env                            # ← your API keys (never committed)
+├── .env.example                    # template for .env
 ├── .gitignore
 │
 ├── src/
-│   ├── agent.py                    # Main agent orchestrator
-│   ├── planner.py                  # Plan generation + LLM refinement
-│   ├── github_tool.py              # GitHub REST API tool
-│   ├── code_analyzer.py            # Python AST analysis tool
+│   ├── agent.py                    # Main agent orchestrator (7 steps)
+│   ├── planner.py                  # Plan generation + Groq LLM refinement
+│   ├── github_tool.py              # Tool 1: GitHub REST API
+│   ├── code_analyzer.py            # Tool 2: Python AST analysis (10 checks)
+│   ├── static_checker.py           # Tool 3: py_compile + AST static checks
 │   ├── reporter.py                 # JSON + Markdown report builder
 │   ├── monitor.py                  # Run metrics logger
 │   ├── evaluator.py                # Precision/recall/F1 evaluation
 │   └── models.py                   # Shared dataclasses
 │
-├── tests/
+├── tests/                          # 53 pytest tests
 │   ├── test_github_tool.py
 │   ├── test_code_analyzer.py
 │   ├── test_agent.py
-│   └── test_evaluator.py
+│   ├── test_evaluator.py
+│   └── test_static_checker.py
 │
 ├── evaluation/
 │   ├── ground_truth.json           # Expected findings per test file
-│   ├── run_evaluation.py           # Evaluation runner
-│   └── test_traces/                # Labeled behavioral traces
-│       ├── trace_001.json          # SUCCESS
-│       ├── trace_002.json          # RECOVERED
-│       └── trace_003.json          # INVALID_INPUT
+│   ├── run_evaluation.py           # Evaluation runner script
+│   ├── evaluation_results.json     # Actual results (P=1.0, R=1.0, F1=1.0)
+│   └── test_traces/                # Labeled behavioral traces (3 scenarios)
 │
 ├── test_repositories/
 │   └── sample_bad_repo/
-│       └── bad_code.py             # Synthetic file with known issues
+│       └── bad_code.py             # Synthetic file with 8 known planted issues
 │
 ├── logs/
-│   ├── sample_success_run.md
-│   ├── sample_failure_recovery_run.md
-│   └── sample_invalid_input_run.md
+│   ├── sample_success_run.md           # Representative sample transcript (success scenario)
+│   ├── sample_failure_recovery_run.md  # Representative sample transcript (failure + recovery)
+│   └── sample_invalid_input_run.md     # Representative sample transcript (invalid input)
+│                                       # Note: these are authored sample logs showing expected
+│                                       # agent behaviour; actual live output is saved to reports/
 │
 ├── docs/
-│   ├── architecture.md
-│   ├── writeup.md
-│   └── form_answers.md
+│   ├── architecture.md             # Full Mermaid diagram + component table
+│   ├── architecture.png            # Visual architecture diagram
+│   ├── writeup.md                  # Technical write-up (~1 page)
+│   └── form_answers.md             # Draft answers for submission form
 │
-└── reports/                        # Generated reports saved here
+└── reports/                        # Auto-generated reports saved here at runtime
 ```
 
 ---
@@ -131,7 +141,7 @@ agentic-code-review-agent/
 ## Setup
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/agentic-code-review-agent
+git clone https://github.com/roylaxmikanta/agentic-code-review-agent
 cd agentic-code-review-agent
 
 python -m venv venv
@@ -145,32 +155,46 @@ pip install -r requirements.txt
 
 ---
 
-## Environment Variables
+## Environment Variables (`.env`)
 
-Copy `.env.example` to `.env`:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env`:
+The `.env` file is already configured with:
 
 ```env
-# Optional — enables LLM plan refinement and narrative generation
-LLM_API_KEY=your_openai_api_key_here
-LLM_MODEL=gpt-4o-mini
-LLM_BASE_URL=https://api.openai.com/v1
+# Groq LLM — free, OpenAI-compatible
+LLM_API_KEY=gsk_...          ← your Groq key
+LLM_MODEL=llama-3.1-8b-instant
+LLM_BASE_URL=https://api.groq.com/openai/v1
 
-# Optional — increases GitHub rate limit from 60 to 5000 req/hr
-GITHUB_TOKEN=your_github_token_here
+# GitHub Token (optional — raises rate limit 60 → 5000 req/hr)
+GITHUB_TOKEN=
 
-# Analysis limits (optional — defaults shown)
+# Analysis limits
 MAX_FILES=30
 MAX_FILE_SIZE=50000
 ```
 
-> **Important:** Never commit `.env`. It is in `.gitignore`.  
-> Public repository analysis works without any tokens.
+> **New to this project?** Copy the template:
+> ```bash
+> cp .env.example .env
+> # then fill in your Groq key from https://console.groq.com
+> ```
+
+### Why Groq?
+
+| | Groq ✅ | HuggingFace ❌ |
+|--|---------|--------------|
+| API format | OpenAI-compatible — **zero code changes** | Different format — needs separate code path |
+| Free tier | 14,400 req/day · 6,000 tokens/min | Slower, rate-limited on free tier |
+| Speed | Very fast (LPU hardware) | Slower on shared inference |
+| Integration effort | Just set 3 env vars | Significant code changes needed |
+
+### What Groq Enables
+
+With `LLM_API_KEY` set, Groq is used for:
+1. **Plan refinement** — the goal text (not code) is sent to Groq to optionally improve the 7-step plan
+2. **Report narrative** — a 3–4 sentence AI assessment based on findings *counts and categories only* (no raw code is ever sent)
+
+Without `LLM_API_KEY`, both steps fall back to deterministic Python logic — the project works identically.
 
 ---
 
@@ -180,74 +204,103 @@ MAX_FILE_SIZE=50000
 streamlit run app.py
 ```
 
-Open `http://localhost:8501` in your browser.
+Open **`http://localhost:8501`** in your browser.
 
 ---
 
 ## Example Input
 
 ```
-Repository URL: https://github.com/psf/requests
-Goal: Analyze this GitHub repository and identify potential code quality issues and suggest fixes.
+Repository URL:  https://github.com/psf/requests
+Goal:            Analyze this GitHub repository and identify potential code quality issues and suggest fixes.
 ```
 
 ---
 
 ## How the Agent Works
 
-### 1. Planning
-The agent converts the user's goal into a concrete execution plan (7 steps). If an LLM API key is configured, it may refine the plan. The plan is shown to the user *before* any tool is called.
+### Step-by-Step Flow
 
-### 2. Tool Execution
-**GitHub Repository Tool** (`src/github_tool.py`):
-- Validates the URL with regex
-- Fetches repository metadata via GitHub REST API
-- Retrieves the file tree
-- Downloads individual file contents
+| Step | Action | Tool Used |
+|------|--------|-----------|
+| 1 | Validate GitHub URL (regex, no network call) | — |
+| 2 | Fetch repository metadata | Tool 1: GitHub API |
+| 3 | Fetch repository file tree | Tool 1: GitHub API |
+| 4 | Select Python files (filter by extension + size) | — |
+| 5 | Download and analyze source files | Tool 1 + Tool 2 + Tool 3 |
+| 6 | Deduplicate and prioritize findings | — |
+| 7 | Generate report + optional Groq narrative | Groq LLM (optional) |
 
-**Code Quality Analyzer** (`src/code_analyzer.py`):
-- Parses Python files with the built-in `ast` module
-- Detects: long functions, deep nesting, broad exceptions, missing docstrings, unused imports, too many arguments, TODO markers, long lines, hardcoded secrets
+### Tool 1 — GitHub Repository Tool (`src/github_tool.py`)
+- Regex-validates the URL
+- Fetches repo metadata (language, stars, default branch)
+- Gets the file tree via Git Trees API
+- Downloads raw file content
 
-### 3. Failure Recovery
-If a tool call fails, the agent logs a `RetryRecord`, waits briefly, and retries (up to 2 attempts total). The failure and recovery are shown in the UI in real time.
+### Tool 2 — Code Quality Analyzer (`src/code_analyzer.py`)
+Uses Python's built-in `ast` module. Detects:
 
-### 4. Report Generation
-All findings are deduplicated, sorted by severity, and assembled into a structured report. The report is available for download as JSON or Markdown.
+| Check | Threshold |
+|-------|-----------|
+| Long functions | > 50 lines |
+| Deep nesting | > 4 levels |
+| Broad exceptions | `except:` or `except Exception:` |
+| Missing docstrings | public functions only |
+| Unused imports | name-match based |
+| Too many arguments | > 6 |
+| TODO / FIXME markers | any occurrence |
+| Long lines | > 120 characters |
+| Hardcoded secrets | password/api_key/token patterns — **masked in output** |
+| Syntax errors | invalid Python |
+
+### Tool 3 — Static Checker (`src/static_checker.py`)
+Uses `py_compile` + `ast`. Optional — can be toggled in UI. Detects:
+- Compile-time syntax errors
+- Silently suppressed exceptions (`except: pass`)
+- Unreachable code after `return`/`raise`
+- Stub functions (docstring or `pass` only, no implementation)
 
 ---
 
 ## Failure Simulation
 
-Check **"Simulate tool failure"** in the UI, or set `simulate_failure=True` when calling `run_agent()`.
+Check **"🔥 Simulate tool failure"** in the UI.
 
-This injects a fake timeout on the first GitHub API call. The agent:
-1. Logs the failure
-2. Displays an error in the UI
-3. Retries immediately
-4. Continues execution normally after recovery
-5. Notes the recovered failure in the final report
+```
+[2/7] Fetching repository metadata...
+  🔄 Attempt 1...
+  ❌ ERROR — Simulated GitHub API timeout
+  ⚠️  Failure detected. Initiating retry...
+  🔄 Attempt 2...
+  ✅ RECOVERED — Repository found: psf/requests
+```
+
+The agent:
+1. Logs `RetryRecord(attempt=1, status="failed")` to state
+2. Displays the error in red in the UI
+3. Retries immediately (attempt 2)
+4. Continues all remaining steps normally
+5. Notes `"One failure recovered through retry"` in the final report
 
 ---
 
 ## Testing
 
 ```bash
+pytest
+# or explicitly:
 pytest tests/ -v
 ```
 
-Tests cover:
-- URL parsing (valid, invalid, edge cases)
-- Simulated failure injection
-- Long function detection
-- Secret detection and masking
-- TODO marker detection
-- Broad exception detection
-- Missing docstring detection
-- Unused import detection
-- Retry logic and recovery records
-- Report structure and correctness
-- Precision/recall/F1 math
+**53 tests** — all pass:
+
+| File | Tests | What's covered |
+|------|-------|---------------|
+| `test_github_tool.py` | 11 | URL parsing, simulated failure, ToolResult structure |
+| `test_code_analyzer.py` | 18 | All 10 check types + metrics calculation |
+| `test_agent.py` | 6 | Retry logic, recovery records, report structure |
+| `test_evaluator.py` | 11 | Label mapping, P/R/F1 math, division-by-zero safety |
+| `test_static_checker.py` | 7 | Syntax check, suppressed exceptions, stub detection |
 
 ---
 
@@ -257,48 +310,52 @@ Tests cover:
 python evaluation/run_evaluation.py
 ```
 
-This runs the code analyzer against `test_repositories/sample_bad_repo/bad_code.py` and compares the detected issues to `evaluation/ground_truth.json`.
+Runs the analyzer against the synthetic `bad_code.py` (8 deliberately planted issues) and compares against `evaluation/ground_truth.json`.
 
-Output:
+**Actual results** (saved in `evaluation/evaluation_results.json`):
+
 ```
-Evaluation Results
-------------------
-Test Cases: 1
-True Positives: X
-False Positives: X
-False Negatives: X
+Test Cases:      1  (bad_code.py — 8 planted issues)
+True Positives:  8
+False Positives: 0
+False Negatives: 0
 
-Precision: X.XX
-Recall:    X.XX
-F1 Score:  X.XX
+Precision: 1.0000
+Recall:    1.0000
+F1 Score:  1.0000
 ```
 
-Results are saved to `evaluation/evaluation_results.json`.
+All 8 planted issues detected with zero false alarms:
+`long_function` · `hardcoded_secret` · `broad_exception` · `todo` ·
+`missing_docstring` · `unused_import` · `too_many_args` · `deep_nesting`
 
 ---
 
 ## Monitoring
 
-The Streamlit UI includes a monitoring dashboard at the bottom of the page showing aggregate statistics from all runs:
+The Streamlit UI includes a **live monitoring dashboard** at the bottom of the page:
 
-- Total / Successful / Recovered / Failed runs
-- Total tool calls, retries, recovered failures
-- Average execution time
-- Total findings detected
-- Run history (last 10 runs)
+| Metric | Description |
+|--------|-------------|
+| Total Runs | All runs recorded |
+| Successful / Recovered / Failed | Run outcome breakdown |
+| Total Tool Calls | Across all runs |
+| Total Retries | Retry attempts triggered |
+| Avg Execution Time | Mean seconds per run |
+| Total Findings | Aggregate findings detected |
 
-Raw data is in `logs/run_monitor.json`.
+Raw data is persisted to `logs/run_monitor.json` and read at startup.
 
 ---
 
 ## Limitations
 
-- **Python only** — AST analysis is language-specific. Other languages are reported as unsupported.
-- **Heuristic rules** — Rules are intentionally simple. Not equivalent to Semgrep, Bandit, or SonarQube.
-- **Secret detection** — Pattern-based. Will miss obfuscated or encrypted secrets.
-- **Unused import detection** — Name matching only; may have false positives with dynamic imports.
-- **GitHub rate limits** — 60 req/hr unauthenticated. Large repositories may hit this limit.
-- **LLM dependency** — Narrative quality depends on the configured model. Fallback is always available.
+- **Python only** — AST analysis is language-specific. Other file types are skipped with a message.
+- **Heuristic rules** — Intentionally simple. Not equivalent to Semgrep, Bandit, or SonarQube.
+- **Secret detection** — Pattern-based; misses obfuscated or encrypted secrets.
+- **Unused import detection** — Name-match only; may have false positives with dynamic imports.
+- **GitHub API rate limits** — 60 req/hr unauthenticated, 5,000/hr with `GITHUB_TOKEN`.
+- **Groq rate limits** — Free tier 6,000 tokens/min; very large repos may be throttled on narrative.
 - **No PR integration** — Currently read-only. Does not post findings to GitHub.
 
 ---
@@ -308,23 +365,23 @@ Raw data is in `logs/run_monitor.json`.
 - JavaScript/TypeScript support via tree-sitter
 - Async file fetching for faster large-repo analysis
 - GitHub Actions integration for automated PR review
-- Persistent findings storage for trend analysis
-- Configurable rule sets
-- Entropy-based secret detection
-- GitHub PR comment posting
+- Persistent findings storage (SQLite) for trend analysis across runs
+- Configurable rule sets per project (YAML config)
+- Entropy-based secret detection (Shannon entropy on string literals)
+- GitHub PR comment posting via API
 
 ---
 
 ## Assignment Deliverables
 
-| Item | Location |
-|------|----------|
-| Source code | `src/`, `app.py` |
-| Architecture diagram | `docs/architecture.md` |
-| Sample run logs | `logs/` |
-| Technical write-up | `docs/writeup.md` |
-| Form answers | `docs/form_answers.md` |
-| Evaluation traces | `evaluation/test_traces/` |
-| Ground truth | `evaluation/ground_truth.json` |
-| Evaluation results | `evaluation/evaluation_results.json` (after running) |
-| Monitoring report | `logs/run_monitor.json` (after running) |
+| Deliverable | Location | Status |
+|-------------|----------|--------|
+| Source code | `src/`, `app.py` | ✅ |
+| Architecture diagram | `docs/architecture.png`, `docs/architecture.md` | ✅ |
+| Sample run logs (×3) | `logs/` | ✅ |
+| Technical write-up | `docs/writeup.md` | ✅ |
+| Form answers draft | `docs/form_answers.md` | ✅ |
+| Labeled test traces (×3) | `evaluation/test_traces/` | ✅ |
+| Ground truth | `evaluation/ground_truth.json` | ✅ |
+| Evaluation results | `evaluation/evaluation_results.json` | ✅ (P=1.0, R=1.0, F1=1.0) |
+| Monitoring report | `logs/run_monitor.json` | ✅ (generated at runtime) |

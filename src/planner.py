@@ -37,8 +37,8 @@ def _llm_refine_plan(goal: str, api_key: str) -> Optional[list[str]]:
     Asks the LLM to produce a concise action plan.
     Returns None on any failure so the caller falls back gracefully.
     """
-    model = os.getenv("LLM_MODEL", "gpt-4o-mini")
-    base_url = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
+    model = os.getenv("LLM_MODEL", "llama-3.1-8b-instant")
+    base_url = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1")
     url = f"{base_url}/chat/completions"
 
     system_prompt = (
@@ -85,8 +85,8 @@ def summarize_findings_with_llm(findings_summary: dict, repo_info: dict) -> Opti
     if not api_key:
         return None
 
-    model = os.getenv("LLM_MODEL", "gpt-4o-mini")
-    base_url = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
+    model = os.getenv("LLM_MODEL", "llama-3.1-8b-instant")
+    base_url = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1")
     url = f"{base_url}/chat/completions"
 
     prompt = (

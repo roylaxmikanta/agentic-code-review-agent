@@ -36,10 +36,14 @@ with st.sidebar:
     st.header("⚙️ Configuration")
 
     api_key_set = bool(os.getenv("LLM_API_KEY", ""))
+    base_url = os.getenv("LLM_BASE_URL", "")
+    model = os.getenv("LLM_MODEL", "")
     if api_key_set:
-        st.success("LLM API key detected ✅")
+        provider = "Groq" if "groq" in base_url.lower() else "OpenAI-compatible"
+        st.success(f"LLM ready ✅ ({provider} · `{model or 'default'}`)")
     else:
-        st.info("No LLM API key — fallback report will be used.")
+        st.info("No LLM key — static fallback report used.")
+        st.caption("💡 Add a free Groq key in `.env` to enable AI narrative.")
 
     gh_token_set = bool(os.getenv("GITHUB_TOKEN", ""))
     if gh_token_set:

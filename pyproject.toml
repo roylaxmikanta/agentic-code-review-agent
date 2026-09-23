@@ -1,0 +1,20 @@
+[project]
+name = "agentic-code-review-agent"
+version = "1.0.0"
+description = "Agentic GitHub Code Quality Reviewer — AI Engineer Internship Assignment"
+requires-python = ">=3.11"
+dependencies = [
+    "streamlit",
+    "requests",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-mock",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
